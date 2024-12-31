@@ -19,6 +19,9 @@
 #define NUM2    1
 #define NUM3    2
 #define NUM4    3
+
+#define M_PI 3.14159265358979323846
+
 extern struct libevdev* dev;
 
 struct Imu_data{
@@ -33,6 +36,10 @@ struct Imu_data{
 
 class KeyboardCtrl : public ros::NodeHandle{
 public:
+    tf2::Quaternion q;
+    mavros_msgs::AttitudeTarget att_cmd_msg;  // 要发布的AttitudeTarget消息
+    Imu_data imu_data;
+
     KeyboardCtrl(int queue_size, double publish_rate);
     bool* get_key_input();
     void update_latch_key_status(uint8_t key_index);
@@ -41,19 +48,17 @@ public:
     void get_namespace (uint8_t);
     void set_mav_cmd();
     int dir_judge(uint8_t dir1, uint8_t dir2);
-    Imu_data imu_data;
-    mavros_msgs::AttitudeTarget att_msg;  // 要发布的AttitudeTarget消息
+    
 private:
     ros::Timer timer;                       // 定时器对象
     ros::Publisher mav_cmd_publisher;        // 发布者
     ros::Subscriber imu_data_subscriber;
-    struct input_event ev;
-    bool latch_key_status[LATCH_KEYS_NUM];
-    bool trigger_key_status[TRIGGER_KEYS_NUM];
     std::string robot_name;
+    struct input_event ev;
 
+    bool latch_key_status[LATCH_KEYS_NUM];
+    bool trigger_key_status[TRIGGER_KEYS_NUM];    
     void imu_data_subscriber_callback(const sensor_msgs::Imu & msg);
     void mav_cmd_callback();
-    
     void timer_callback(const ros::TimerEvent& event);  // 定时器回调函数
 };

@@ -13,6 +13,8 @@
 #include <std_msgs/Char.h>
 #include <geometry_msgs/Vector3.h>
 #include <libevdev/libevdev.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/utils.h>
 
 #include "keyboard_ctrl.hpp"
 
@@ -70,7 +72,7 @@ KeyboardCtrl::KeyboardCtrl(int queue_size, double publish_rate){
 
 void KeyboardCtrl::mav_cmd_callback(){
     set_mav_cmd();
-    mav_cmd_publisher.publish(att_msg);
+    mav_cmd_publisher.publish(att_cmd_msg);
     // ROS_INFO("AttitudeTarget published!");
 }
 
@@ -95,13 +97,23 @@ int KeyboardCtrl::dir_judge(uint8_t dir1, uint8_t dir2){
 }
 
 void KeyboardCtrl::set_mav_cmd(){
-    att_msg.thrust = 0.5;
-    att_msg.type_mask = 7;      // 这里的body_rate表示角速度还是角度，取决于type_mask的值，如果为7表示角度
-    att_msg.body_rate.x = 5*dir_judge(LEFT, RIGHT);    // 单位度每秒或度
-    att_msg.body_rate.y = 5*dir_judge(UP, DOWN); 
-    att_msg.body_rate.z = 5*dir_judge(A, D);
-    att_msg.body_rate.z = 21;
-    //mav_cmd_publisher.publish(att_msg);
+    att_cmd_msg.thrust = 0.5;
+    att_cmd_msg.type_mask = 7;      // 这里的body_rate表示角速度还是角度，取决于type_mask的值，如果为7表示角度
+    q.setRPY(50*dir_judge(LEFT, RIGHT)*M_PI/180.0, 5*dir_judge(UP, DOWN)*M_PI/180.0, 5*dir_judge(A, D)*M_PI/180.0);
+
+    att_cmd_msg.orientation.x = q.x()/0.707107*1000;
+    att_cmd_msg.orientation.y = q.y()/0.707107*1000;
+    att_cmd_msg.orientation.z = q.z()/0.707107*1000;
+    att_cmd_msg.orientation.w = q.w()/0.707107*1000;
+    // att_cmd_msg.orientation.x = (uint8_t)0/0.7071;
+    // att_cmd_msg.orientation.y = (uint8_t)0/0.7071;
+    // att_cmd_msg.orientation.z = (uint8_t)0/0.7071;
+    // att_cmd_msg.orientation.w = (uint8_t)1/0.7071;
+    att_cmd_msg.body_rate.x = 5*dir_judge(LEFT, RIGHT);    // 单位度每秒或度
+    att_cmd_msg.body_rate.y = 5*dir_judge(UP, DOWN); 
+    att_cmd_msg.body_rate.z = 5*dir_judge(A, D);
+
+    //mav_cmd_publisher.publish(att_cmd_msg);
 }
 
 // 更新键盘输入状态
@@ -191,10 +203,33 @@ void KeyboardCtrl::timer_callback(const ros::TimerEvent& event){
     mav_cmd_callback();
     // printKeyStatus();
 }
+float atan2_approx(float y, float x)
+{
+    #define atanPolyCoef1  3.14551665884836e-07f
+    #define atanPolyCoef2  0.99997356613987f
+    #define atanPolyCoef3  0.14744007058297684f
+    #define atanPolyCoef4  0.3099814292351353f
+    #define atanPolyCoef5  0.05030176425872175f
+    #define atanPolyCoef6  0.1471039133652469f
+    #define atanPolyCoef7  0.6444640676891548f
 
+    float res, absX, absY;
+    absX = std::fabs(x);
+    absY = std::fabs(y);
+    res  = std::max(absX, absY);
+    res  = std::max(absX, absY);
+    if (res) res = std::min(absX, absY) / res;
+    else res = 0.0f;
+    res = -((((atanPolyCoef5 * res - atanPolyCoef4) * res - atanPolyCoef3) * res - atanPolyCoef2) * res - atanPolyCoef1) / ((atanPolyCoef7 * res + atanPolyCoef6) * res + 1.0f);
+    if (absY > absX) res = (M_PI / 2.0f) - res;
+    if (x < 0) res = M_PI - res;
+    if (y < 0) res = -res;
+    return res;
+}
 int main(int argc, char** argv) {
     //disableEcho();
-    const char* dev_path = "/dev/input/event3";  // 输入设备路径，根据实际情况修改
+    
+    const char* dev_path = "/dev/input/event14";  // 输入设备路径，根据实际情况修改
     int fd = open(dev_path, O_RDONLY | O_NONBLOCK);
     if (fd == -1) {
         perror("Open device error");
@@ -214,5 +249,6 @@ int main(int argc, char** argv) {
     // ROS 主循环
     ros::spin();
     enableEcho();
+    //std::cout<< atan2_approx(0,-1)<<std::endl;
     return 0;
 }
