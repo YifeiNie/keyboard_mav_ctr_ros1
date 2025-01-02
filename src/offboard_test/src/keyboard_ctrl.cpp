@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string>
+#include <Eigen/Eigen>
 
 #include <mavros_msgs/AttitudeTarget.h>
 #include <sensor_msgs/Imu.h>
@@ -59,7 +60,7 @@ void KeyboardCtrl::printKeyStatus() {
 KeyboardCtrl::KeyboardCtrl(int queue_size, double publish_rate){
 
     robot_name = {};
-    mav_cmd_publisher = advertise<mavros_msgs::AttitudeTarget>("mavros/setpoint_raw/attitude", 10);
+    mav_cmd_publisher = advertise<mavros_msgs::AttitudeTarget>("mavros/setpoint_raw/attitude", 100);
     // 如果采用继承ros::NodeHandle的方法订阅，需要添加this关键字如下
     imu_data_subscriber = this->subscribe("/mavros/imu/data_raw", 1000, &KeyboardCtrl::imu_data_subscriber_callback, this); 
     ROS_INFO("mavros initialized");
@@ -96,22 +97,50 @@ int KeyboardCtrl::dir_judge(uint8_t dir1, uint8_t dir2){
     return 0;
 }
 
+Eigen::Quaterniond KeyboardCtrl::quaternion_from_rpy(const Eigen::Vector3d &rpy)
+{
+	// YPR - ZYX
+	return Eigen::Quaterniond(
+			Eigen::AngleAxisd(rpy.z(), Eigen::Vector3d::UnitZ()) *
+			Eigen::AngleAxisd(rpy.y(), Eigen::Vector3d::UnitY()) *
+			Eigen::AngleAxisd(rpy.x(), Eigen::Vector3d::UnitX())
+			);
+}
+
 void KeyboardCtrl::set_mav_cmd(){
     att_cmd_msg.thrust = 0.5;
     att_cmd_msg.type_mask = 7;      // 这里的body_rate表示角速度还是角度，取决于type_mask的值，如果为7表示角度
     q.setRPY(50*dir_judge(LEFT, RIGHT)*M_PI/180.0, 5*dir_judge(UP, DOWN)*M_PI/180.0, 5*dir_judge(A, D)*M_PI/180.0);
 
-    att_cmd_msg.orientation.x = q.x()/0.707107*1000;
-    att_cmd_msg.orientation.y = q.y()/0.707107*1000;
-    att_cmd_msg.orientation.z = q.z()/0.707107*1000;
-    att_cmd_msg.orientation.w = q.w()/0.707107*1000;
-    // att_cmd_msg.orientation.x = (uint8_t)0/0.7071;
-    // att_cmd_msg.orientation.y = (uint8_t)0/0.7071;
-    // att_cmd_msg.orientation.z = (uint8_t)0/0.7071;
-    // att_cmd_msg.orientation.w = (uint8_t)1/0.7071;
-    att_cmd_msg.body_rate.x = 5*dir_judge(LEFT, RIGHT);    // 单位度每秒或度
-    att_cmd_msg.body_rate.y = 5*dir_judge(UP, DOWN); 
-    att_cmd_msg.body_rate.z = 5*dir_judge(A, D);
+    // att_cmd_msg.orientation.x = q.x();
+    // att_cmd_msg.orientation.y = q.y();
+    // att_cmd_msg.orientation.z = q.z();
+    // att_cmd_msg.orientation.w = q.w();
+
+    ///////////////////////////////////////////////
+    Eigen::Quaterniond r1 = KeyboardCtrl::quaternion_from_rpy(Eigen::Vector3d(M_PI, 0.0, M_PI_2));  // 左侧旋转
+    Eigen::Quaterniond r2 = KeyboardCtrl::quaternion_from_rpy(Eigen::Vector3d(M_PI, 0.0, 0.0));     // 右侧旋转
+    Eigen::Quaterniond eigen_q; 
+
+    eigen_q.x() = 0;
+    eigen_q.y() = 0;
+    eigen_q.z() = 0;
+    eigen_q.w() = 1;
+    Eigen::Quaterniond result = r1 * eigen_q * r2;
+
+    att_cmd_msg.orientation.x = result.x();
+    att_cmd_msg.orientation.y = result.y();
+    att_cmd_msg.orientation.z = result.z();
+    att_cmd_msg.orientation.w = result.w();
+    /////////////////////////////////////////////
+
+    // att_cmd_msg.body_rate.x = 5.32*dir_judge(LEFT, RIGHT); 
+    // att_cmd_msg.body_rate.y = 5.3212*dir_judge(UP, DOWN); 
+    // att_cmd_msg.body_rate.z = 5.3223*dir_judge(A, D);
+    att_cmd_msg.body_rate.x = 5.32;    // 单位度每秒或度
+    att_cmd_msg.body_rate.y = 5.3212; 
+    att_cmd_msg.body_rate.z = 5.3223;
+
 
     //mav_cmd_publisher.publish(att_cmd_msg);
 }
@@ -229,7 +258,7 @@ float atan2_approx(float y, float x)
 int main(int argc, char** argv) {
     //disableEcho();
     
-    const char* dev_path = "/dev/input/event14";  // 输入设备路径，根据实际情况修改
+    const char* dev_path = "/dev/input/event16";  // 输入设备路径，根据实际情况修改
     int fd = open(dev_path, O_RDONLY | O_NONBLOCK);
     if (fd == -1) {
         perror("Open device error");

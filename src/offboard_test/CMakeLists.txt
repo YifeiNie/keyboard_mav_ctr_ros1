@@ -8,6 +8,9 @@ project(offboard_test)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 set(CMAKE_BUILD_TYPE "Debug")	
+find_package(Eigen3 REQUIRED)
+
+set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -34,6 +37,7 @@ include_directories(/usr/include/libevdev-1.0/)
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS} 
 )
 file(GLOB SRC_FILES "src/*cpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})

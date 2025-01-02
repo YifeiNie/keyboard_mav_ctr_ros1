@@ -48,6 +48,7 @@ public:
     void get_namespace (uint8_t);
     void set_mav_cmd();
     int dir_judge(uint8_t dir1, uint8_t dir2);
+    Eigen::Quaterniond quaternion_from_rpy(const Eigen::Vector3d &rpy);
     
 private:
     ros::Timer timer;                       // 定时器对象
